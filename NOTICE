@@ -1,0 +1,43 @@
+Ayaz ASR — training recipe
+Copyright 2026 Veli Ayaz
+
+This product includes software developed by Veli Ayaz, licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository contains code only. It does NOT contain model weights, audio, transcripts or manifests.
+
+Base model
+----------
+The recipe fine-tunes nvidia/nemotron-3.5-asr-streaming-0.6b by NVIDIA
+(https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b), licensed under the OpenMDW License Agreement,
+version 1.1 (https://openmdw.ai/license/1-1/). The base model's weights are not included here; obtain them from
+NVIDIA's model repository under its licence. Models trained with this recipe are derivatives of that model and are
+subject to its licence terms. The published Ayaz ASR v0.1 weights are released under OpenMDW-1.1
+(https://huggingface.co/VeliAyaz/ayaz-asr-tr-streaming-0.6b).
+This work is not endorsed or supported by NVIDIA.
+
+Software used (not included)
+----------------------------
+- NVIDIA NeMo (https://github.com/NVIDIA-NeMo/NeMo), Apache License 2.0. The training code was started from NVIDIA's
+  fine-tuning guide "How to fine-tune Nemotron 3.5 ASR for your language, domain, or accent" (Hugging Face Blog, 2026).
+- sherpa-onnx by k2-fsa (https://github.com/k2-fsa/sherpa-onnx), Apache License 2.0.
+  export/export_onnx.py is derived from sherpa-onnx scripts/nemo/nemotron-3.5-asr-streaming-0.6b/export_onnx.py
+  (commit 99ddefaa), Copyright 2026 Julian Pscheid, Apache License 2.0; modified to read a local .nemo, to write to a
+  chosen directory, to leave int8 quantisation to a separate step and to take the 'comment' metadata from --label.
+- ONNX and ONNX Runtime, PyTorch, Lightning, lhotse and the other packages listed in requirements.txt, each under its
+  own licence.
+
+Datasets (downloaded by the scripts, not included)
+--------------------------------------------------
+- YODAS, cleaned release of OWSM v4: espnet/yodas_owsmv4 (https://huggingface.co/datasets/espnet/yodas_owsmv4),
+  CC-BY-3.0. Li X, Takamichi S, Saeki T, Chen W, Shiota S, Watanabe S. "YODAS: YouTube-oriented dataset for audio and
+  speech." IEEE ASRU 2023. Peng Y, et al. "OWSM v4: improving open Whisper-style speech models via data scaling and
+  cleaning." arXiv:2506.00338, 2025. Labels are the videos' manually written subtitles.
+- YODAS2 (espnet/yodas2, https://huggingface.co/datasets/espnet/yodas2): only the list of manually subtitled Turkish
+  videos (data/tr000/text, video ids) is read; see its dataset card for licence terms.
+- FLEURS: google/fleurs (https://huggingface.co/datasets/google/fleurs), CC-BY-4.0. Conneau A, et al. "FLEURS: few-shot
+  learning evaluation of universal representations of speech." IEEE SLT 2022.
+
+In-house data
+-------------
+Ayaz ASR v0.1 additionally used consented volunteer voice messages and the developer's own recordings. These data are
+not distributed and are not part of this repository.

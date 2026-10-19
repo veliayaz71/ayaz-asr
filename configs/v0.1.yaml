@@ -1,0 +1,133 @@
+# Ayaz ASR v0.1 — exact settings of the published run (checkpoint: selected step 8000 of a 9000-step run).
+# Documentation only: no script reads this file. The scripts' CLI defaults are set to the same values, except in three
+# places: eval/fleurs_multilingual.py --parallel (default 1; reproduce.sh passes 3), train.py --short-test-padding (a
+# flag) and build_rehearsal.py --max-label-tokens (computed from --turkish-manifest unless given; v0.1: 127).
+#
+# TR: Yayımlanan koşunun (seçilen adım 8000, 9000 adımlık koşu) ayarları. Yalnız belgedir, hiçbir betik okumaz; komut
+# satırı varsayılanları üç yer dışında bu değerlerdir.
+
+base_model:
+  name: nvidia/nemotron-3.5-asr-streaming-0.6b          # NeMo EncDecRNNTBPEModelWithPrompt
+  file: nemotron-3.5-asr-streaming-0.6b.nemo
+  sha256: 210214ed94039bf6bfbb9a047c7fa289628db75b103e2bf6381fa78285436a74
+  decoding_context: [56, 6]                             # encoder attention context = 560 ms chunks (training measurements + export)
+
+hardware:
+  machine: single Apple M4 Mac, 24 GB unified memory
+  device: mps
+  env:
+    PYTORCH_ENABLE_MPS_FALLBACK: 1
+    PYTORCH_MPS_HIGH_WATERMARK_RATIO: 1.1
+    PYTORCH_MPS_LOW_WATERMARK_RATIO: 1.0                  # must be set together with the high ratio (see train.py env)
+    HF_HUB_OFFLINE: 1
+    TOKENIZERS_PARALLELISM: "false"
+  runtime: about 9 h in total (≈ 7.4 h training incl. interim measurements + ≈ 1.8 h multilingual verdict)
+
+training:                    # train/train.py run
+  steps: 9000
+  eval_every: 1000
+  progress_every: 100
+  selected_step: 8000        # chosen by the selection rule (no step met all interim criteria -> lowest balance score)
+  trainable: last 8 encoder layers + prediction network + joint network + language-prompt module (prompt kernel); rest of the encoder (incl. input subsampling) frozen
+  trainable_params: {total: 230370336, encoder_last_8: 201515008, prediction_network: 14940160, joint: 9455648, prompt_kernel: 4459520}   # v0.1 training log
+  layers: 8
+  optimizer: {name: adamw, lr: 3.0e-5, betas: [0.9, 0.98], weight_decay: 1.0e-3}
+  precision: 32-true
+  batch_seconds: 30
+  buckets: 6
+  quadratic_duration: 15
+  max_duration_s: 20.0       # lhotse filter; speech clips are <= 10 s, empty / noise clips go up to 20 s
+  min_duration_s: 0.3
+  joint_log_softmax: false   # loss computed on the CPU (numba RNNT); joint's log_softmax off
+  seeds: {torch: 0, python: 0, resume_shuffle: "30092026 + step"}
+  anchor:                    # L2-SP, discrete form: theta <- theta + k (theta0 - theta) every `interval` steps
+    tau: 4500
+    interval: 10
+    k: 0.002220001           # 1 - (1 - 1/tau)^interval
+    lambda: 7.41             # 1 / (lr * tau)
+    storage: fp16 on CPU
+  digits_as_words: true      # labels and scoring spell out digits as Turkish words
+
+measurement:
+  fleurs_tr_subset: {n: 150, seed: 29092026}
+  interim_criteria:          # step selection
+    fleurs_tr_subset_max_rise_points: 0.3
+    guard_decision_langs: [de_de, en_us]
+    guard_max_rise_points: 1.5
+    echo_empty_share_max_drop_points: 5.0
+    noise_decides: false
+    strict_interim: true     # also short-utterance empty <= 2 and in-domain relative >= 10 %
+  guard_langs: [de_de, en_us, fr_fr, ru_ru, ja_jp, ro_ro, et_ee, bg_bg]   # FLEURS dev, 100 recordings each
+  short_test_padding: {start_s: 1.0, end_s: 1.2}
+  verdict:                   # in-training verdict on the selected step (full FLEURS-tr)
+    indomain_min_relative_gain: 0.10
+    fleurs_tr_full_max_rise_points: 0.5
+    short_max_empty: 2
+    echo_empty_share_max_drop_points: 5.0
+    guard_de_en_max_rise_points: 1.5
+
+multilingual_verdict:        # eval/fleurs_multilingual.py --full --verdict ...
+  set: whole FLEURS test split of 33 languages + Turkish 150-clip subset
+  parallel_downloads: 3
+  base_sanity: {digits_as_words: 0.1204, raw: 0.1338, tolerance: 0.002}
+  de_en_max_rise_points: 1.0
+  main_languages_median_max_rise_points: 2.0   # 29 main languages excluding Turkish (needs >= 25 measured)
+  any_language_max_rise_points: 5.0            # Thai excluded
+  bootstrap: {resamples: 1000, seed: 1}
+
+data:
+  yodas:                     # data/yodas_index.py, data/yodas_download.py, data/prepare_eval_sets.py
+    source: espnet/yodas_owsmv4 (yodas0.10) + espnet/yodas2 data/tr000/text (manual-subtitle list)
+    selection: manual subtitles ∩ punctuated (>= 50 %) ∩ Turkish letters (>= 15 %)
+    clips: {max_s: 12.0, min_s: 1.0, cut_at_sentence_after_s: 4.0, max_gap_s: 0.8, margin_s: 0.15, char_rate: [3, 25]}
+    dev_split: {videos: 30, seed: 29092026}
+  turkish_manifest:          # data/build_turkish_manifest.py
+    per_video: 4
+    max_duration_s: 10.0
+    seed: 30092026
+    used_in_v0_1: {yodas_clips: 14387, yodas_hours: 24.6, videos: 3848}   # model card
+    in_house_not_distributed:
+      speech: {clips: 215, copies: 5}                       # developer's everyday speech (model card)
+      empty_examples: {clips: 3285, hours: 1.7}            # model card
+      settings: {empty_copies: 16, noise_target_hours: 1.92, variation: true}   # 1.92 h is the target; the card reports 1.7 h achieved
+  rehearsal:                 # data/build_rehearsal.py download|label, data/filter_rehearsal.py (script defaults = these values)
+    languages: 32            # all FLEURS languages of the model except Turkish and Thai
+    clip_s: [1.0, 10.0]
+    per_sentence: 2
+    download_spare: 1.15     # download target = round(quota * 1.15)
+    quota: 300
+    quota_priority: 1300     # de_de, en_us
+    quota_lang: "lv_lv:600,lt_lt:600,et_ee:600,ro_ro:600"
+    quality_margin: 0.12     # label error may exceed the base test error (100-recording FLEURS test cache) by this much
+    quality_drop: true       # a failing non-priority language is dropped (more than 4 dropped -> stop); none was dropped
+    hours: [15, 32]
+    guard_n: 100
+    parallel_downloads: 3
+    max_label_tokens: 127    # longest label of the v0.1 Turkish manifest (base tokenizer)
+    sanity_expected: 0.1204
+    labels: base model's own output (self-distillation), own language prompt, 560 ms context
+    result_v0_1:             # labelling summary of the v0.1 run; replaying the script's selection logic on these
+                             # statistics gives the same per-language counts (a real run can differ if the FLEURS
+                             # files or the base model's outputs change)
+      rows: 12680
+      hours: 28.08
+      per_language_used: {de_de: 1180, en_us: 1300, et_ee: 600, lt_lt: 600, lv_lv: 600, ro_ro: 600, others: 300}
+      archive_exhausted: {de_de: 1180, en_us: 1354, ro_ro: 608}   # fewer suitable recordings than the download target
+      turkish_manifest: {rows: 18747, hours: 27.32}
+    after_filter: {clips: 12649, hours: 28.0, removed: 31}   # model card / filter log
+  mixture:                   # data/build_mixture.py
+    seed: 2102026
+    priority_copies: 2       # de-DE, en-US rehearsal rows
+    extras_in_v0_1:          # NOT distributed (consented in-house data)
+      - {what: "voice messages from volunteers (model card: 881 clips, 0.9 h)", copies: 3}
+      - {what: "developer's short-utterance / command recordings (model card: 331 utterances, 5.7 min)", copies: 5}
+
+export:                      # export/export_sherpa_onnx.sh (export_onnx.py, quantize_int8.py, compare_metadata.py,
+                             # finalize_package.py); published package = selected step 8000
+  chunk_ms: 560              # encoder context [56, 560/80 - 1 = 6]
+  exporter: sherpa-onnx scripts/nemo/nemotron-3.5-asr-streaming-0.6b/export_onnx.py @ 99ddefaa, adapted for a local .nemo
+  onnx_opset: 13
+  quantization: onnxruntime 1.28.0 quantize_dynamic, weight_type QUInt8 (onnx 1.23.0), separate environment
+  official_tokens_sha256: 729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a
+  required_encoder_metadata_keys: 18
+  comment_metadata_v0_1: "Ayaz ASR v0.1 — fine-tuned from nvidia/nemotron-3.5-asr-streaming-0.6b; exported with sherpa-onnx export_onnx.py (560 ms chunks); int8 dynamic quantization"

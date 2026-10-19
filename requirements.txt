@@ -1,0 +1,12 @@
+# Training / data / evaluation environment.
+# Pinned: the NeMo version used for v0.1. The other versions of the v0.1 environment (Python, torch, lightning,
+# lhotse, numba) were not recorded; they are left unpinned to NeMo 3.0.0's own requirements.
+# `python3 train/train.py env` prints the versions of your environment.
+nemo_toolkit[asr]==3.0.0
+soundfile
+soxr          # resampling of YODAS audio to 16 kHz
+psutil
+numpy
+onnx          # needed by export/export_onnx.py (runs in this environment); version to be confirmed in the dry run
+# system tool: curl (all downloads)
+# export (separate environment): see export/requirements-export.txt

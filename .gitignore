@@ -1,0 +1,29 @@
+# working directory: datasets, manifests, models, runs
+work/
+datasets/
+/models/
+runs/
+
+# data and model files
+*.nemo
+*.pt
+*.ckpt
+*.onnx
+*.onnx.data
+*.wav
+*.flac
+*.mp3
+*.ogg
+*.opus
+*.m4a
+*.jsonl
+*.tsv
+*.tar.gz
+
+# environments and caches
+.venv/
+.venv-export/
+__pycache__/
+*.pyc
+numba_cache/
+.DS_Store

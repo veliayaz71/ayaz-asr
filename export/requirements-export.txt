@@ -1,0 +1,4 @@
+# Separate small environment for quantisation and package checks (versions used for v0.1).
+# The NeMo -> ONNX export itself runs in the training environment (requirements.txt).
+onnx==1.23.0
+onnxruntime==1.28.0
